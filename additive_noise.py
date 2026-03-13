@@ -1,5 +1,6 @@
 import numpy as np
 import matplotlib.pyplot as plt
+from scipy.io.wavfile import write
 
 def add_noise(audio, noise_level=0.005, noise_type='gaussian', start_time=None, end_time=None, sample_rate=44100):
     """
@@ -126,3 +127,16 @@ if __name__ == "__main__":
     # Save one example corrupted data to file (optional)
     np.save('corrupted_data.npy', corrupted_data_gaussian)
     print("Corrupted data saved to 'corrupted_data.npy'")
+    
+    # Save audio files for listening (normalize to int16)
+    def save_wav(data, filename, sample_rate):
+        # Normalize to int16 range
+        data_int = np.int16(data / np.max(np.abs(data)) * 32767)
+        write(filename, sample_rate, data_int)
+    
+    save_wav(original_data, 'original.wav', sample_rate)
+    save_wav(corrupted_data_gaussian, 'gaussian_noise.wav', sample_rate)
+    save_wav(corrupted_data_uniform, 'uniform_noise.wav', sample_rate)
+    save_wav(corrupted_data_salt_pepper, 'salt_pepper_noise.wav', sample_rate)
+    save_wav(corrupted_data_impulsive, 'impulsive_noise.wav', sample_rate)
+    print("Audio files saved: original.wav, gaussian_noise.wav, uniform_noise.wav, salt_pepper_noise.wav, impulsive_noise.wav")
