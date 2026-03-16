@@ -1,0 +1,12 @@
+input=data/sample.wav
+output=data/sample_fft_corruption.wav
+sample_rate=44100
+num_samples=9312768
+duration_sec=211.1738775510204
+mode=fft_corruption
+region_mode=full
+num_regions=1
+fade_ms=10.0
+seed=0
+regions=
+  - region_index=0, start_sample=0, end_sample=9312768, start_time_sec=0.0, end_time_sec=211.1738775510204, duration_sec=211.1738775510204, mode=fft_corruption, mask_ratio=0.4, noise_std=0.0, phase_noise_std=0.0

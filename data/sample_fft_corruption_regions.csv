@@ -1,0 +1,2 @@
+duration_sec,end_sample,end_time_sec,mask_ratio,mode,noise_std,phase_noise_std,region_index,start_sample,start_time_sec
+211.1738775510204,9312768,211.1738775510204,0.4,fft_corruption,0.0,0.0,0,0,0.0
