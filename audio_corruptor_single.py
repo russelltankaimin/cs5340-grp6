@@ -19,14 +19,14 @@ Region control
 Examples
 --------
 # Full-file Gaussian noise
-python audio_corruptor_single.py input.wav output.wav --mode gaussian --snr_db 10
+python audio_corruptor_single.py input.wav sample_bitcrushing.wav --mode gaussian --snr_db 10
 
 # Only corrupt 0.5-1.2s and 3.0-4.0s
-python audio_corruptor_single.py input.wav output.wav --mode pink \
+python audio_corruptor_single.py input.wav sample_bitcrushing.wav --mode pink \
     --region_mode time_ranges --ranges 0.5:1.2,3.0:4.0
 
 # Corrupt 4 random regions of 0.75s each
-python audio_corruptor_single.py input.wav output.wav --mode combo \
+python audio_corruptor_single.py input.wav sample_bitcrushing.wav --mode combo \
     --region_mode random_segments --num_segments 4 --segment_duration 0.75 \
     --snr_db 8 --bands 12 --max_gain_db 6
 
