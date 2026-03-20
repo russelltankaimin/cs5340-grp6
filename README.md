@@ -3,6 +3,18 @@
 ## Basic Setup
 
 ### General Setup
+Setup your Python environment and install the required dependencies for the project. We recommend using a virtual environment to manage dependencies. For MacOS and Linux:
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
+```
+
+For windows:
+```bash
+python -m venv .venv
+.venv\Scripts\activate
+```
+
 Install the required dependencies for the project:
 ```bash
 pip install -r requirements.txt
@@ -17,7 +29,7 @@ pip install descript-audio-codec
 pip install alias-free-torch
 ```
 
-Note: You might need to install `ffmpeg` separately on your system to handle audio processing.
+Note: You might need to install `ffmpeg` separately on your system to handle audio processing. This is not needed if you are running on SoC Cluster.
 
 For example, on MacOS, you can use Homebrew:
 ```bash
@@ -51,6 +63,11 @@ You should modify the `audio_path` in the script to point to the extracted clip.
 ```bash
 python exp_v1.py --input path/to/corrupted/audio.wav --corruption soft_clip
 ```
-to perform the Bayesian reconstruction and obtain the reconstructed audio.
+to perform the Bayesian reconstruction and obtain the reconstructed audio. 
+
+If you are running on the SoC Cluster, modify `scripts/gpu_job.sh` to include the correct command to run the reconstruction script with the appropriate parameters. Then, submit the job using:
+```bash
+sbatch scripts/gpu_job.sh
+```
 
 Note that you can change the type of corruption, the severity of the corruption, and other parameters in the scripts to experiment with different scenarios. Just make sure that the parameters describing the corruption are passed into the `exp_v1.py` script correctly to ensure the reconstruction process works as intended.
