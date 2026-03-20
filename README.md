@@ -30,3 +30,27 @@ To run the VAE inference script, use the following command:
 ```bash
 python vae_sample.py --input-fpath path/to/your/input.wav 
 ```
+
+### Experiment Sample Workflow
+1. Choose your favourite audio file and place it in the `data` directory, here we use `data/sample.wav` as an example.
+2. We run 
+```bash
+python compute_stats.py --input-fpath data/sample.wav
+```
+to compute the statistics of the audio file, which will be used for the Bayesian reconstruction process. If you want to use a prior that does not leak information of the original audio, you can use the statistics computed from a different audio file.
+3. We extract a short clip of `T` seconds, here `T=5` seconds, from the original audio file using 
+```bash
+python extract.py --audio-path data/sample.wav --start-time 96 --duration 5
+```
+4. We then corrupt the extracted clip using 
+```bash
+python waveform_soft_clip_dist.py
+```
+You should modify the `audio_path` in the script to point to the extracted clip.
+5. Finally, we run 
+```bash
+python exp_v1.py --input path/to/corrupted/audio.wav --corruption soft_clip
+```
+to perform the Bayesian reconstruction and obtain the reconstructed audio.
+
+Note that you can change the type of corruption, the severity of the corruption, and other parameters in the scripts to experiment with different scenarios. Just make sure that the parameters describing the corruption are passed into the `exp_v1.py` script correctly to ensure the reconstruction process works as intended.
