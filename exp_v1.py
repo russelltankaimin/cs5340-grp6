@@ -230,7 +230,8 @@ def reconstruct(args: argparse.Namespace) -> None:
             print(
                 f"[{step:>5}/{args.steps}]  total={total.item():.4f}  "
                 f"L_w={Lw.item():.4f}  L_colin={Lcol.item():.4f}  "
-                f"L_wav={Lwav.item():.4f}  L_mel={Lmel.item():.4f}"
+                f"L_wav={Lwav.item():.4f}  L_mel={Lmel.item():.4f}",
+                flush=True
             )
 
     # ── Decode best latent & save ────────────────────────────────────────
