@@ -11,31 +11,37 @@ By unifying our forward corruption models into fully differentiable PyTorch modu
 * **`scripts/`**: Executable entry points for dataset generation, statistics computation, and the Bayesian reconstruction loop.
 * **`vae_ckpt/`**: Directory designated for pre-trained weights and configurations.
 
+```text
 cs5340-grp6-main/
-├── ear_vae/                  # The core Generative Model (Untouched)
-│   ├── __init__.py
-│   ├── ear_vae.py
-│   ├── autoencoders.py
-│   └── transformer.py
-├── corruptions/              # Unified Differentiable Forward Models (New)
-│   ├── __init__.py
-│   ├── registry.py           # Central dictionary for all corruption functions
-│   ├── additive.py           # Gaussian, Pink, Hum (PyTorch)
-│   ├── frequency.py          # Random EQ, FFT Masking (PyTorch)
-│   └── nonlinear.py          # Soft Clip, Bitcrush, Sinusoidal (PyTorch)
-├── utils/                    # Shared Utilities (New)
-│   ├── __init__.py
-│   ├── audio_io.py           # Loading, saving, resampling logic
-│   ├── regions.py            # The region parsing and crossfading logic
-│   └── losses.py             # L_w, L_colin, L_wav, L_mel 
-├── scripts/                  # Executable Entry Points (New)
-│   ├── corrupt_dataset.py    # Replaces audio_corruptor_*.py
-│   ├── run_reconstruction.py # Refactored exp_v1.py
-│   ├── compute_stats.py
-│   └── vae_sample.py
-├── vae_ckpt/
-├── requirements.txt
-└── README.md
+├── ear_vae/                  # Core generative model architecture (frozen VAE)
+│   ├── __init__.py           # Package initialisation
+│   ├── ear_vae.py            # Main wrapper class for the entire VAE pipeline
+│   ├── autoencoders.py       # Oobleck-based convolutional encoder and decoder
+│   └── transformer.py        # Continuous transformer for latent space modelling
+├── corruptions/              # Fully differentiable forward models (degradations)
+│   ├── __init__.py           # Package init; auto-registers all corruptions on import
+│   ├── registry.py           # Central dictionary for managing corruption functions
+│   ├── additive.py           # Differentiable additive noises (Gaussian, Pink, Hum)
+│   ├── frequency.py          # Differentiable frequency-domain noises (FFT Mask, EQ)
+│   └── nonlinear.py          # Differentiable distortions (Soft Clip, STE Bitcrush)
+├── utils/                    # Shared helper functions and logic
+│   ├── __init__.py           # Package initialisation
+│   ├── audio_io.py           # Standardised audio loading, saving, and resampling
+│   ├── regions.py            # Time-segment application with crossfade blending
+│   └── losses.py             # Objective functions (L_w, L_colin, L_wav, L_mel)
+├── scripts/                  # Executable entry points for the pipeline
+│   ├── corrupt_dataset.py    # Generates degraded evaluation datasets
+│   ├── run_reconstruction.py # The core Bayesian optimisation gradient descent loop
+│   ├── compute_stats.py      # Computes prior latent statistics (mean, std)
+│   ├── gpu_job.sh            # Slurm batch script for SoC cluster execution
+│   └── vae_sample.py         # Inference test script to verify model health
+├── vae_ckpt/                 # Pre-trained model checkpoints
+│   ├── ear_vae_44k.pyt       # The pre-trained weights from HuggingFace
+│   └── model_config.json     # Hyperparameter configuration for the VAE
+├── data/                     # Directory for input/output audio files and JSON stats
+├── requirements.txt          # Python package dependencies
+└── README.md                 # Project documentation and setup instructions
+```
 
 ---
 
