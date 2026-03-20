@@ -29,11 +29,16 @@ pip install descript-audio-codec
 pip install alias-free-torch
 ```
 
-Note: You might need to install `ffmpeg` separately on your system to handle audio processing. This is not needed if you are running on SoC Cluster.
+Note: You might need to install `ffmpeg` separately on your system to handle audio processing. Remember to restart your terminal/IDE after installation. This is not needed if you are running on SoC Cluster.
 
 For example, on MacOS, you can use Homebrew:
 ```bash
 brew install ffmpeg
+```
+
+For Windows, you can install via winget:
+```bash
+winget install "FFmpeg (Shared)"
 ```
 
 Download the model weight file from [HuggingFace](https://huggingface.co/earlab/EAR_VAE/tree/main/pretrained_weight), named `ear_vae_44k.pyt` and place it in the `vae_ckpt` directory.
