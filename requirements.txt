@@ -1,16 +1,17 @@
-contourpy==1.3.3
-cycler==0.12.1
-fonttools==4.62.0
-kiwisolver==1.5.0
-matplotlib==3.10.8
-numpy==2.4.3
-packaging==26.0
-pillow==12.1.1
-pyparsing==3.3.2
-python-dateutil==2.9.0.post0
-scipy==1.10.1
-six==1.17.0
-torch
-torchvision
-torchaudio
-torchcodec
+# PyTorch Core
+torch>=2.0.0
+torchaudio>=2.0.0
+
+# VAE Specific Dependencies
+einops
+alias-free-torch
+descript-audio-codec
+
+# Data & Math Utilities
+numpy
+scipy
+soundfile
+
+# Attention mechanisms (Optional but recommended for transformer.py)
+# flash_attn==2.3.3
+# natten

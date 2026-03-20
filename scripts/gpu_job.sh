@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Job name
-#SBATCH --job-name=gpu_job
+#SBATCH --job-name=cs5340_reconstruction
 #SBATCH --partition=gpu
 
 ## Request the appropriate GPU:
@@ -28,10 +28,15 @@ source ".venv/bin/activate"
 # Remove cache
 rm -r __pycache__
 
-# Modify this based on your actual command to run the reconstruction script.
-python exp_v1.py \
-    --input distorted_output_sinus.wav \
+# Run the Bayesian reconstruction script as a module to ensure paths resolve correctly.
+# Ensure your input audio is placed in the 'data/' directory (or update the path below).
+python -m scripts.run_reconstruction \
+    --input data/distorted_output_sinus.wav \
+    --output data/reconstructed.wav \
     --corruption sinusoidal \
     --corruption-kwargs '{"noise_level": 0.1}' \
     --prior-stats latent_stats.json \
-    --steps 10000 --lr 1e-3
+    --vae-checkpoint vae_ckpt/ear_vae_44k.pyt \
+    --vae-config vae_ckpt/model_config.json \
+    --steps 10000 \
+    --lr 1e-3
