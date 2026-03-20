@@ -62,6 +62,7 @@ python vae_sample.py --input-fpath path/to/your/input.wav
     python waveform_soft_clip_dist.py
     ```
     You should modify the `audio_path` in the script to point to the extracted clip.
+    You can also use other `waveform_*` scripts to apply different types of corruption to the audio clip. Make sure to adjust the parameters in the script to control the severity of the corruption as needed.
 
 5. Finally, we run 
     ```bash
