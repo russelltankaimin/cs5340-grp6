@@ -53,13 +53,13 @@ python vae_sample.py --input-fpath path/to/your/input.wav
 
 2. We run 
     ```bash
-    python compute_stats.py --input-fpath data/sample.wav
+    python compute_stats.py --audio-path data/sample.wav
     ```
     to compute the statistics of the audio file, which will be used for the Bayesian reconstruction process. If you want to use a prior that does not leak information of the original audio, you can use the statistics computed from a different audio file.
 
 3. We extract a short clip of `T` seconds, here `T=5` seconds, from the original audio file using 
     ```bash
-    python extract.py --audio-path data/sample.wav --start-time 96 --duration 5
+    python extract.py --audio-path data/sample.wav --start-time 96 --clip-seconds 5
     ```
 
 4. We then corrupt the extracted clip using 
@@ -71,7 +71,7 @@ python vae_sample.py --input-fpath path/to/your/input.wav
 
 5. Finally, we run 
     ```bash
-    python exp_v1.py --input path/to/corrupted/audio.wav --corruption soft_clip
+    python exp_v1.py --input path/to/corrupted/audio.wav --corruption soft_clip --prior-stats <file from step 1>
     ```
     to perform the Bayesian reconstruction and obtain the reconstructed audio. 
 
