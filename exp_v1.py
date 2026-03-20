@@ -1,7 +1,7 @@
 """
 Usage
 -----
-    python bayesian_audio_recon.py \
+    python exp_v1.py \
         --input corrupted.wav \
         --corruption soft_clip \
         --corruption-kwargs '{"drive": 15.0}' \
@@ -27,14 +27,13 @@ import torchaudio
 DEFAULT_VAE_CKPT   = os.path.join(".", "vae_ckpt", "ear_vae_44k.pyt")
 DEFAULT_VAE_CONFIG = os.path.join(".", "vae_ckpt", "model_config.json")
 
-
 # =========================================================================
 # 1.  CORRUPTION FUNCTION REGISTRY
 # =========================================================================
 
 def sinusoidal_noise(
     waveform: torch.Tensor,
-    noise_level: float = 0.05,
+    noise_level: float = 0.1,
     num_components: int = 64,
 ) -> torch.Tensor:
     """Deterministic pseudo-noise built from a sum of sinusoids with
@@ -89,7 +88,7 @@ def loss_colin(z: torch.Tensor, K: int) -> torch.Tensor:
     sim_matrix = normed @ normed.T                      # (K, K)
     # Upper triangle (excluding diagonal)
     mask = torch.triu(torch.ones(K, K, device=z.device), diagonal=1).bool()
-    return -sim_matrix[mask].sum()
+    return -sim_matrix[mask].mean()
 
 
 def loss_waveform(
@@ -202,7 +201,7 @@ def reconstruct(args: argparse.Namespace) -> None:
         ).unsqueeze(0)
 
         # ── Individual losses ────────────────────────────────────────────
-        print(f"z shape: {z.shape}  mu shape: {mu.shape}  sigma shape: {sigma.shape}")
+        # print(f"z shape: {z.shape}  mu shape: {mu.shape}  sigma shape: {sigma.shape}")
         Lw    = loss_w(z, mu, sigma)
         Lcol  = loss_colin(z, args.K)
         Lwav  = loss_waveform(corrupted_audio, corrupted_recon)
