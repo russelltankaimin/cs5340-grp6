@@ -2,6 +2,9 @@
 *.wav
 *.mp3
 
+# data files
+*.json
+
 # model checkpoints
 *.pt
 *.pth

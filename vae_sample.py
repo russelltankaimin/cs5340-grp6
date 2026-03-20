@@ -48,7 +48,9 @@ def main(args):
         # Add batch dimension
         gt_y = gt_y.unsqueeze(0)
 
+        print(f"Input audio shape (after processing): {gt_y.shape}")
         audio_latent = model.encode(gt_y)
+        print(f"Encoded latent shape: {audio_latent.shape}")
         reconstructed_audio = model.decode(audio_latent)
 
         # get stem name from input audio path
