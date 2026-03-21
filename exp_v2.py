@@ -293,11 +293,13 @@ def reconstruct(args: argparse.Namespace) -> None:
             mel_transform,
         )
 
-        
+        # New Trajectory Prior replacing or supplementing Lw
+        L_traj = loss_trajectory(z, args.lambda_0, args.lambda_1, args.lambda_2)
 
         # Total loss update
         total = (
-            args.lambda_colin * Lcol
+            L_traj                  # Integrated Trajectory Prior
+            + args.lambda_colin * Lcol
             + args.lambda_wav   * Lwav
             + args.lambda_mel   * Lmel
 )
