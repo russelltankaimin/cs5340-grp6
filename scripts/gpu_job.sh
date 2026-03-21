@@ -29,7 +29,7 @@ source ".venv/bin/activate"
 rm -r __pycache__
 
 # Modify this based on your actual command to run the reconstruction script.
-python exp_v1.py \
+python experiments/exp_v1.py \
     --input distorted_output_sinus.wav \
     --corruption sinusoidal \
     --corruption-kwargs '{"noise_level": 0.1}' \
