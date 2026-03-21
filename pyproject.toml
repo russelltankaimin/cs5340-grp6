@@ -9,7 +9,7 @@ dependencies = [
     "fonttools>=4.62.1",
     "kiwisolver>=1.5.0",
     "matplotlib>=3.10.8",
-    "numpy>=2.4.3",
+    "numpy",
     "packaging>=26.0",
     "pillow>=12.1.1",
     "pyparsing>=3.3.2",
