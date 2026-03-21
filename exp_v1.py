@@ -162,6 +162,37 @@ def loss_mel(
     mel_rec = torch.log(mel_transform(corrupted_recon[..., :T]) + 1e-9)
     return (mel_in - mel_rec).pow(2).mean()
 
+def loss_trajectory(z: torch.Tensor, l0: float, l1: float, l2: float) -> torch.Tensor:
+    """
+    Implements the Latent Trajectory Prior from Equation (3).
+    z shape: (batch, latent_dim, T_prime)
+    """
+    # Note: Your z is currently (1, 64, T_prime). 
+    # We transpose to (T_prime, 64) for easier sequence indexing.
+    w = z.squeeze(0).T 
+    T_prime = w.shape[0]
+    
+    # Term 1: Gaussian Region Constraint (Zeroth-order)
+    # ||w_t||^2
+    loss_0 = torch.norm(w, p=2, dim=1).pow(2).sum() / T_prime
+    
+    # Term 2: First-order Temporal Smoothness (Velocity)
+    # ||w_t - w_{t-1}||^2
+    if T_prime > 1:
+        diff1 = w[1:] - w[:-1]
+        loss_1 = torch.norm(diff1, p=2, dim=1).pow(2).sum() / (T_prime - 1)
+    else:
+        loss_1 = 0.0
+
+    # Term 3: Second-order Smoothness (Acceleration)
+    # ||w_t - 2w_{t-1} + w_{t-2}||^2
+    if T_prime > 2:
+        diff2 = w[2:] - 2*w[1:-1] + w[:-2]
+        loss_2 = torch.norm(diff2, p=2, dim=1).pow(2).sum() / (T_prime - 2)
+    else:
+        loss_2 = 0.0
+
+    return (l0/2 * loss_0) + (l1/2 * loss_1) + (l2/2 * loss_2)
 
 # =========================================================================
 # 3.  AUDIO I/O HELPERS
@@ -262,12 +293,16 @@ def reconstruct(args: argparse.Namespace) -> None:
             mel_transform,
         )
 
+        # New Trajectory Prior replacing or supplementing Lw
+        L_traj = loss_trajectory(z, args.lambda_0, args.lambda_1, args.lambda_2)
+
+        # Total loss update
         total = (
-            args.lambda_w       * Lw
+            L_traj                  # Integrated Trajectory Prior
             + args.lambda_colin * Lcol
             + args.lambda_wav   * Lwav
             + args.lambda_mel   * Lmel
-        )
+)
 
         total.backward()
         optimiser.step()
@@ -340,6 +375,14 @@ def parse_args() -> argparse.Namespace:
     p.add_argument("--n-fft",      type=int, default=1024)
     p.add_argument("--hop-length", type=int, default=256)
     p.add_argument("--n-mels",     type=int, default=80)
+
+    # Add these new arguments for the Trajectory Prior
+    p.add_argument("--lambda-0", type=float, default=1.0,
+                   help="Weight for zeroth-order typical region constraint.")
+    p.add_argument("--lambda-1", type=float, default=0.1,
+                   help="Weight for first-order temporal smoothness (velocity).")
+    p.add_argument("--lambda-2", type=float, default=0.1,
+                   help="Weight for second-order temporal smoothness (acceleration).")
 
     return p.parse_args()
 
