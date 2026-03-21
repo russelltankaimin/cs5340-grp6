@@ -299,10 +299,11 @@ def reconstruct(args: argparse.Namespace) -> None:
         # Total loss update
         total = (
             L_traj                  # Integrated Trajectory Prior
+            + args.lambda_w * Lw
             + args.lambda_colin * Lcol
             + args.lambda_wav   * Lwav
             + args.lambda_mel   * Lmel
-)
+        )
 
         total.backward()
         optimiser.step()
