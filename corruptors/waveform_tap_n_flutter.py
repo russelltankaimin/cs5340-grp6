@@ -55,23 +55,23 @@ def tape_wow_flutter(
     return output
 
 
-# ── Demo ─────────────────────────────────────────────────────────────────
-audio_path = "sample_5s.wav"
-gt_y, sr = torchaudio.load(audio_path, backend="ffmpeg")
-gt_y.requires_grad_(True)
+if __name__ == "__main__":
+    audio_path = "sample_5s.wav"
+    gt_y, sr = torchaudio.load(audio_path, backend="ffmpeg")
+    gt_y.requires_grad_(True)
 
-# Apply corruption (differentiable)
-distorted_y = tape_wow_flutter(gt_y, sample_rate=sr)
+    # Apply corruption (differentiable)
+    distorted_y = tape_wow_flutter(gt_y, sample_rate=sr)
 
-# Verify gradients flow
-loss = distorted_y.mean()
-loss.backward()
-print(f"Gradient flows: {gt_y.grad is not None}")  # True
-print(f"Grad shape:     {gt_y.grad.shape}")
+    # Verify gradients flow
+    loss = distorted_y.mean()
+    loss.backward()
+    print(f"Gradient flows: {gt_y.grad is not None}")  # True
+    print(f"Grad shape:     {gt_y.grad.shape}")
 
-# Save
-torchaudio.save(
-    "distorted_output_wow_flutter.wav",
-    distorted_y.detach(),
-    sr,
-)
+    # Save
+    torchaudio.save(
+        "distorted_output_wow_flutter.wav",
+        distorted_y.detach(),
+        sr,
+    )

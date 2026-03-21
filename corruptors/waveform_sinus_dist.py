@@ -19,17 +19,17 @@ def sinusoidal_noise(
     noise = noise / noise.std()
     return waveform + noise_level * noise
 
-# Load audio
-audio_path = "../data/vshort.wav"
-gt_y, sr = torchaudio.load(audio_path, backend="ffmpeg")
-gt_y.requires_grad_(True)
+if __name__ == "__main__":
+    audio_path = "../data/vshort.wav"
+    gt_y, sr = torchaudio.load(audio_path, backend="ffmpeg")
+    gt_y.requires_grad_(True)
 
-# Apply distortion (differentiable)
-distorted_y = sinusoidal_noise(gt_y, noise_level=0.1)
+    # Apply distortion (differentiable)
+    distorted_y = sinusoidal_noise(gt_y, noise_level=0.1)
 
-# Save
-torchaudio.save(
-    "distorted_output_sin.wav",
-    distorted_y.detach(),
-    sr
-)
+    # Save
+    torchaudio.save(
+        "distorted_output_sin.wav",
+        distorted_y.detach(),
+        sr
+    )

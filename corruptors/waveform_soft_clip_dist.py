@@ -8,17 +8,18 @@ def soft_clip_distortion(
     """Tanh soft-clipping distortion (fully differentiable)."""
     return torch.tanh(waveform * drive)
 
-# Load audio
-audio_path = "../data/sample_5s.wav"
-gt_y, sr = torchaudio.load(audio_path, backend="ffmpeg")
-gt_y.requires_grad_(True)
 
-# Apply distortion (differentiable)
-distorted_y = soft_clip_distortion(gt_y, drive=15.0)
+if __name__ == "__main__":
+    audio_path = "../data/sample_5s.wav"
+    gt_y, sr = torchaudio.load(audio_path, backend="ffmpeg")
+    gt_y.requires_grad_(True)
 
-# Save
-torchaudio.save(
-    "distorted_output.wav",
-    distorted_y.detach(),
-    sr
-)
+    # Apply distortion (differentiable)
+    distorted_y = soft_clip_distortion(gt_y, drive=15.0)
+
+    # Save
+    torchaudio.save(
+        "distorted_output.wav",
+        distorted_y.detach(),
+        sr
+    )
