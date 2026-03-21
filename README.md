@@ -18,6 +18,7 @@ python -m venv .venv
 Install the required dependencies for the project:
 ```bash
 pip install -r requirements.txt
+pip install -e .
 ```
 
 ### VAE Setup and Usage
@@ -45,7 +46,7 @@ Download the model weight file from [HuggingFace](https://huggingface.co/earlab/
 
 To run the VAE inference script, use the following command:
 ```bash
-python vae_sample.py --input-fpath path/to/your/input.wav 
+python utils/vae_sample.py --input-fpath path/to/your/input.wav 
 ```
 
 ### Experiment Sample Workflow
@@ -53,25 +54,25 @@ python vae_sample.py --input-fpath path/to/your/input.wav
 
 2. We run 
     ```bash
-    python compute_stats.py --audio-path data/sample.wav
+    python utils/compute_stats.py --audio-path data/sample.wav
     ```
     to compute the statistics of the audio file, which will be used for the Bayesian reconstruction process. If you want to use a prior that does not leak information of the original audio, you can use the statistics computed from a different audio file.
 
 3. We extract a short clip of `T` seconds, here `T=5` seconds, from the original audio file using 
     ```bash
-    python extract.py --audio-path data/sample.wav --start-time 96 --clip-seconds 5
+    python utils/extract.py --audio-path data/sample.wav --start-time 96 --clip-seconds 5
     ```
 
 4. We then corrupt the extracted clip using 
     ```bash
-    python waveform_soft_clip_dist.py
+    python corruptors/waveform_soft_clip_dist.py
     ```
     You should modify the `audio_path` in the script to point to the extracted clip.
-    You can also use other `waveform_*` scripts to apply different types of corruption to the audio clip. Make sure to adjust the parameters in the script to control the severity of the corruption as needed.
+    You can also use other `waveform_*` scripts in `corruptors/` to apply different types of corruption to the audio clip. Make sure to adjust the parameters in the script to control the severity of the corruption as needed.
 
 5. Finally, we run 
     ```bash
-    python exp_v1.py --input path/to/corrupted/audio.wav --corruption soft_clip --prior-stats <file from step 1>
+    python experiments/exp_v1.py --input path/to/corrupted/audio.wav --corruption soft_clip --prior-stats <file from step 1>
     ```
     to perform the Bayesian reconstruction and obtain the reconstructed audio. 
 
