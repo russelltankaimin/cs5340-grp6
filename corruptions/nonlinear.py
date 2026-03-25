@@ -31,24 +31,20 @@ def sinusoidal_noise(waveform: torch.Tensor, noise_level: float = 0.05, num_comp
     return waveform + (noise_level * noise)
 
 @register_corruption("bit_crush")
-def bit_crush_corruption(waveform: torch.Tensor, bits: int = 8) -> torch.Tensor:
-    """
-    Applies bit-depth reduction using a Straight-Through Estimator (STE).
-    This ensures that gradients pass through the mathematically non-differentiable quantisation step.
-    """
-    if bits >= 32:
-        return waveform
+def bit_crush_corruption(waveform: torch.Tensor, bits: int = 8, decimation: int = 1) -> torch.Tensor:
+    if bits < 32:
+        q = 2 ** (bits - 1)
+        quantised = torch.round(waveform * q) / q
+        waveform = waveform + (quantised - waveform).detach() # STE for quantisation
         
-    q = 2 ** (bits - 1)
-    
-    # Non-differentiable mathematical quantisation
-    quantised = torch.round(waveform * q) / q
-    
-    # Straight-Through Estimator (STE)
-    # Forward pass evaluates to `quantised`. Backward pass ignores the bracket.
-    ste_quantised = waveform + (quantised - waveform).detach()
-    
-    return ste_quantised
+    if decimation > 1:
+        # Sample and hold mechanism
+        B, C, T = waveform.shape if waveform.dim() == 3 else (1, 1, waveform.shape[-1])
+        indices = torch.arange(T, device=waveform.device)
+        downsampled_indices = (indices // decimation) * decimation
+        waveform = waveform[..., downsampled_indices]
+        
+    return waveform
 
 @register_corruption("tape_and_flutter")
 def tape_and_flutter(waveform: torch.Tensor, sr: int = 44100, wow_depth: float = 0.001, wow_freq: float = 1.0, flutter_depth: float = 0.0005, flutter_freq: float = 15.0) -> torch.Tensor:

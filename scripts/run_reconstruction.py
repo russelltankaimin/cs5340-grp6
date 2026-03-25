@@ -10,7 +10,7 @@ import torch
 
 from ear_vae.ear_vae import EAR_VAE
 from corruptions.registry import CORRUPTION_REGISTRY
-from utils.losses import loss_w, loss_colin, loss_waveform, get_mel_loss_fn
+from utils.losses import loss_w, loss_colin, loss_waveform, get_mel_loss_fn, loss_trajectory
 from utils.audio_io import load_audio, save_audio
 
 def load_vae(config_path: str, ckpt_path: str, device: str) -> EAR_VAE:
@@ -38,7 +38,7 @@ def reconstruct(args: argparse.Namespace) -> None:
     with open(args.prior_stats, "r") as f:
         stats = json.load(f)
     mu = torch.tensor(stats["mean"], dtype=torch.float32, device=device).view(1, -1, 1)
-    sigma = torch.tensor(stats["stds"], dtype=torch.float32, device=device).view(1, -1, 1)
+    sigma = torch.tensor(stats["stds"], dtype=torch.float32, device=device).unsqueeze(0)
 
     # 2. Setup the target differentiable corruption
     corruption_fn = CORRUPTION_REGISTRY[args.corruption]
@@ -69,9 +69,10 @@ def reconstruct(args: argparse.Namespace) -> None:
         Lcol  = loss_colin(z)
         Lwav  = loss_waveform(corrupted_audio, corrupted_recon)
         Lmel  = loss_mel(corrupted_audio.squeeze(0), corrupted_recon.squeeze(0))
+        Ltraj = loss_trajectory(z, args.lambda_0, args.lambda_1, args.lambda_2)
 
         total = (args.lambda_w * Lw + args.lambda_colin * Lcol + 
-                 args.lambda_wav * Lwav + args.lambda_mel * Lmel)
+                 args.lambda_wav * Lwav + args.lambda_mel * Lmel + Ltraj)
 
         total.backward()
         optimiser.step()
@@ -110,5 +111,10 @@ if __name__ == "__main__":
     p.add_argument("--n-fft", type=int, default=1024)
     p.add_argument("--hop-length", type=int, default=256)
     p.add_argument("--n-mels", type=int, default=80)
+    
+    # Trajectory Prior Weights
+    p.add_argument("--lambda-0", type=float, default=1.0)
+    p.add_argument("--lambda-1", type=float, default=0.1)
+    p.add_argument("--lambda-2", type=float, default=0.1)
     
     reconstruct(p.parse_args())

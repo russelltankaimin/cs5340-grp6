@@ -47,3 +47,30 @@ def get_mel_loss_fn(sample_rate: int, device: str, n_fft=1024, hop_length=256, n
         return (mel_in - mel_rec).pow(2).mean()
     
     return loss_mel
+
+def loss_trajectory(z: torch.Tensor, l0: float, l1: float, l2: float) -> torch.Tensor:
+    """
+    Implements the Latent Trajectory Prior.
+    z shape: (batch, latent_dim, T_prime)
+    """
+    w = z.squeeze(0).T 
+    T_prime = w.shape[0]
+    
+    # Term 1: Gaussian Region Constraint (Zeroth-order)
+    loss_0 = torch.norm(w, p=2, dim=1).pow(2).sum() / T_prime
+    
+    # Term 2: First-order Temporal Smoothness (Velocity)
+    if T_prime > 1:
+        diff1 = w[1:] - w[:-1]
+        loss_1 = torch.norm(diff1, p=2, dim=1).pow(2).sum() / (T_prime - 1)
+    else:
+        loss_1 = 0.0
+
+    # Term 3: Second-order Smoothness (Acceleration)
+    if T_prime > 2:
+        diff2 = w[2:] - 2*w[1:-1] + w[:-2]
+        loss_2 = torch.norm(diff2, p=2, dim=1).pow(2).sum() / (T_prime - 2)
+    else:
+        loss_2 = 0.0
+
+    return (l0/2 * loss_0) + (l1/2 * loss_1) + (l2/2 * loss_2)

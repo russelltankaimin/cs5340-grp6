@@ -232,3 +232,5 @@ __marimo__/
 
 # Custom ignore rules
 data_full/
+output/
+test_data/
