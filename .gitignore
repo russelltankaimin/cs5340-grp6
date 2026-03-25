@@ -230,3 +230,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Custom ignore rules
+data_full/
+test_data/
