@@ -2,9 +2,10 @@ import argparse
 import os
 
 import torchaudio
+import torch.nn.functional as F
 
 
-def extract_clip(audio_path: str, start_time: float, clip_seconds: float):
+def extract_clip(audio_path: str, start_time: float, clip_seconds: float, fill: bool = False):
     waveform, sr = torchaudio.load(audio_path, backend='ffmpeg')
 
     if start_time < 0:
@@ -25,12 +26,18 @@ def extract_clip(audio_path: str, start_time: float, clip_seconds: float):
         )
 
     if end_sample > total_samples:
-        raise ValueError(
-            f'Requested clip [{start_time:.3f}s, {start_time + clip_seconds:.3f}s] '
-            f'exceeds audio duration ({total_duration:.3f}s).'
-        )
+        if fill:
+            clip = waveform[:, start_sample:total_samples]
+            pad_length = end_sample - total_samples
+            clip = F.pad(clip, (0, pad_length))
+        else:
+            raise ValueError(
+                f'Requested clip [{start_time:.3f}s, {start_time + clip_seconds:.3f}s] '
+                f'exceeds audio duration ({total_duration:.3f}s).'
+            )
+    else:
+        clip = waveform[:, start_sample:end_sample]
 
-    clip = waveform[:, start_sample:end_sample]
     return clip, sr
 
 

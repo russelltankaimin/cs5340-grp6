@@ -47,7 +47,8 @@ from datetime import datetime
 from pathlib import Path
 
 import torch
-import torchaudio
+from torchcodec.decoders import AudioDecoder
+from torchcodec.encoders import AudioEncoder
 
 from corruptors.waveform_sinus_dist import sinusoidal_noise
 
@@ -163,7 +164,7 @@ def run_pipeline(args: argparse.Namespace) -> None:
     print("\n=== Computing latent prior statistics ===")
     model = load_model(device)
     waveform, sr = preprocess_audio(args.audio_path, target_sr=44100, device=device)
-    clips_for_stats = split_clips(waveform, sr, args.clip_seconds)
+    clips_for_stats, num_clips = split_clips(waveform, sr, args.clip_seconds, fill=args.fill_last_clip)
     mean, stds = compute_latent_stats(model, clips_for_stats)
     with open(stats_path, "w") as f:
         json.dump(
@@ -176,9 +177,10 @@ def run_pipeline(args: argparse.Namespace) -> None:
     print(f"Saved latent stats → {stats_path}")
 
     # ── 4. Determine number of clips ─────────────────────────────────────────
-    info = torchaudio.info(args.audio_path)
-    total_duration = info.num_frames / info.sample_rate
-    num_clips = int(total_duration // args.clip_seconds)
+    decoder = AudioDecoder(args.audio_path)
+    info = decoder.metadata
+
+    total_duration = info.duration_seconds
     print(
         f"\nAudio duration: {total_duration:.2f}s → {num_clips} clips of {args.clip_seconds}s"
     )
@@ -200,16 +202,17 @@ def run_pipeline(args: argparse.Namespace) -> None:
 
         print(f"\n{'=' * 60}")
         print(
-            f"Processing {clip_label}  (t={start_time:.1f}s – {start_time + args.clip_seconds:.1f}s)"
+            f"Processing {clip_label}  (t={start_time:.1f}s - {start_time + args.clip_seconds:.1f}s)"
         )
         print(f"{'=' * 60}")
 
         # Extract and save clean clip via extract.py
         clean_clip, clip_sr = extract_clip(
-            args.audio_path, start_time, args.clip_seconds
+            args.audio_path, start_time, args.clip_seconds, fill=args.fill_last_clip
         )
-        clean_path = str(clip_dir / "clean.wav")
-        torchaudio.save(clean_path, clean_clip, sample_rate=clip_sr, backend="ffmpeg")
+        clean_path = str(clip_dir / f"clean_{clip_idx:02d}.wav")
+        encoder_clean = AudioEncoder(clean_clip, sample_rate=clip_sr)
+        encoder_clean.to_file(clean_path)
 
         summary["clips"][clip_label] = {}
 
@@ -226,14 +229,13 @@ def run_pipeline(args: argparse.Namespace) -> None:
             corrupted_clip = (
                 corruption_fn(clean_clip.to(device), **ckwargs).detach().cpu()
             )
-            corrupted_path = str(corr_dir / "corrupted.wav")
-            torchaudio.save(
-                corrupted_path, corrupted_clip, sample_rate=clip_sr, backend="ffmpeg"
-            )
+            corrupted_path = str(corr_dir / f"corrupted_{corruption_name}_{clip_idx:02d}.wav")
+            encoder_corr = AudioEncoder(corrupted_clip, sample_rate=clip_sr)
+            encoder_corr.to_file(corrupted_path)
 
             # b) Reconstruct with exp_v1 and exp_v2
-            recon_v1_path = str(corr_dir / "reconstructed_v1.wav")
-            recon_v2_path = str(corr_dir / "reconstructed_v2.wav")
+            recon_v1_path = str(corr_dir / f"reconstructed_v1_{corruption_name}_{clip_idx:02d}.wav")
+            recon_v2_path = str(corr_dir / f"reconstructed_v2_{corruption_name}_{clip_idx:02d}.wav")
 
             print("  [exp_v1] Reconstructing...")
             reconstruct_v1(
@@ -282,13 +284,13 @@ def run_pipeline(args: argparse.Namespace) -> None:
             v1_metrics = evaluate_all(clean_t, recon_v1_t, sr=44100)
             v2_metrics = evaluate_all(clean_t, recon_v2_t, sr=44100)
 
-            with open(corr_dir / "metrics_v1.json", "w") as f:
+            with open(corr_dir / f"metrics_v1_{corruption_name}_{clip_idx:02d}.json", "w") as f:
                 json.dump(
                     {"baseline": baseline_metrics, "reconstructed": v1_metrics},
                     f,
                     indent=4,
                 )
-            with open(corr_dir / "metrics_v2.json", "w") as f:
+            with open(corr_dir / f"metrics_v2_{corruption_name}_{clip_idx:02d}.json", "w") as f:
                 json.dump(
                     {"baseline": baseline_metrics, "reconstructed": v2_metrics},
                     f,
@@ -302,24 +304,24 @@ def run_pipeline(args: argparse.Namespace) -> None:
                 corr_t,
                 recon_v1_t,
                 sr=44100,
-                save_path=str(corr_dir / "spectrogram_v1.png"),
+                save_path=str(corr_dir / f"spectrogram_v1_{corruption_name}_{clip_idx:02d}.png"),
             )
             plot_spectrograms(
                 clean_t,
                 corr_t,
                 recon_v2_t,
                 sr=44100,
-                save_path=str(corr_dir / "spectrogram_v2.png"),
+                save_path=str(corr_dir / f"spectrogram_v2_{corruption_name}_{clip_idx:02d}.png"),
             )
             plot_metrics_comparison(
                 baseline_metrics,
                 v1_metrics,
-                save_path=str(corr_dir / "metrics_comparison_v1.png"),
+                save_path=str(corr_dir / f"metrics_comparison_v1_{corruption_name}_{clip_idx:02d}.png"),
             )
             plot_metrics_comparison(
                 baseline_metrics,
                 v2_metrics,
-                save_path=str(corr_dir / "metrics_comparison_v2.png"),
+                save_path=str(corr_dir / f"metrics_comparison_v2_{corruption_name}_{clip_idx:02d}.png"),
             )
 
             summary["clips"][clip_label][corruption_name] = {
@@ -366,6 +368,14 @@ def parse_args() -> argparse.Namespace:
         type=str,
         default="results",
         help="Root directory for timestamped output folders.",
+    )
+    p.add_argument(
+        "--fill-last-clip",
+        action="store_true",
+        help=(
+            "Whether to fill the last clip with zeros if it is shorter than clip_seconds. "
+            "If False, the last partial clip is discarded."
+        ),
     )
 
     # Corruption
@@ -439,4 +449,7 @@ def parse_args() -> argparse.Namespace:
 
 
 if __name__ == "__main__":
-    run_pipeline(parse_args())
+    try:
+        run_pipeline(parse_args())
+    except Exception as e:
+        print(f"Error occurred: {e}")

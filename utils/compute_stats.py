@@ -3,6 +3,7 @@ import json
 import os
 
 import torch
+import torch.nn.functional as F
 import torchaudio
 from tqdm import tqdm
 
@@ -44,24 +45,29 @@ def preprocess_audio(
 
     return waveform, sr
 
-
-def split_clips(waveform: torch.Tensor, sr: int, clip_seconds: float) -> torch.Tensor:
+def split_clips(waveform: torch.Tensor, sr: int, clip_seconds: float, fill: bool = False) -> torch.Tensor:
     samples_per_clip = int(sr * clip_seconds)
     total_samples = waveform.shape[1]
-    num_clips = total_samples // samples_per_clip
 
-    if num_clips == 0:
-        raise ValueError(
-            f"Audio too short for T={clip_seconds}s. "
-            f"Total duration: {total_samples / sr:.3f}s."
-        )
+    if fill:
+        remainder = total_samples % samples_per_clip
+        if remainder > 0 or total_samples == 0:
+            pad_length = samples_per_clip - remainder
+            waveform = F.pad(waveform, (0, pad_length))
+        
+        num_clips = waveform.shape[1] // samples_per_clip
+        processed_waveform = waveform
+    else:
+        num_clips = total_samples // samples_per_clip
+        if num_clips == 0:
+            raise ValueError(
+                f"Audio too short for T={clip_seconds}s. "
+                f"Total duration: {total_samples / sr:.3f}s."
+            )
+        processed_waveform = waveform[:, : num_clips * samples_per_clip]
 
-    clipped = waveform[:, : num_clips * samples_per_clip]
-    clips = clipped.reshape(waveform.shape[0], num_clips, samples_per_clip).permute(
-        1, 0, 2
-    )
-    return clips
-
+    clips = processed_waveform.reshape(waveform.shape[0], num_clips, samples_per_clip).permute(1, 0, 2)
+    return clips, num_clips
 
 def compute_latent_stats(
     model: EAR_VAE, clips: torch.Tensor
