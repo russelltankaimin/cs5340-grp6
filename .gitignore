@@ -38,6 +38,7 @@ parts/
 sdist/
 var/
 wheels/
+logs/
 share/python-wheels/
 *.egg-info/
 .installed.cfg
@@ -232,3 +233,7 @@ __marimo__/
 
 # Streamlit
 .streamlit/secrets.toml
+
+# Custom ignore rules
+data_full/
+test_data/

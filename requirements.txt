@@ -8,7 +8,7 @@ packaging==26.0
 pillow==12.1.1
 pyparsing==3.3.2
 python-dateutil==2.9.0.post0
-scipy==1.10.1
+scipy
 six==1.17.0
 torch
 torchvision

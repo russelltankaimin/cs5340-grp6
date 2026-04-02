@@ -1,23 +1,32 @@
-import torchaudio
-import os
-import torch
 import argparse
 import json
+import os
+
+import torch
+import torchaudio
+
 from ear_vae.ear_vae import EAR_VAE
 
 MODEL_PATH = os.path.join(".", "vae_ckpt", "ear_vae_44k.pyt")
 CONFIG_PATH = os.path.join(".", "vae_ckpt", "model_config.json")
 
+
 def main(args):
     input_audio_path = args.input_fpath
-    device = "cuda" if torch.cuda.is_available() else "cpu"
+    device = (
+        "cuda"
+        if torch.cuda.is_available()
+        else "mps"
+        if torch.backends.mps.is_available()
+        else "cpu"
+    )
 
     print(f"Input audio path: {input_audio_path}")
     print(f"Model path: {MODEL_PATH}")
     print(f"Device: {device}")
     print(f"Config path: {CONFIG_PATH}")
 
-    with open(CONFIG_PATH, 'r') as f:
+    with open(CONFIG_PATH, "r") as f:
         vae_gan_model_config = json.load(f)
 
     print("Loading model...")
@@ -40,7 +49,7 @@ def main(args):
             gt_y = resampler(gt_y)
 
         gt_y = gt_y.to(device, torch.float32)
-        
+
         # Convert to stereo if mono
         if gt_y.shape[0] == 1:
             gt_y = torch.cat([gt_y, gt_y], dim=0)
@@ -60,12 +69,19 @@ def main(args):
 
         reconstructed_audio = reconstructed_audio.squeeze(0).cpu()
         output_fpath = os.path.join(".", output_filename)
-        torchaudio.save(output_fpath, reconstructed_audio, sample_rate=44100, backend="ffmpeg")
+        torchaudio.save(
+            output_fpath, reconstructed_audio, sample_rate=44100, backend="ffmpeg"
+        )
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Run VAE-GAN audio inference.")
-    parser.add_argument('--input-fpath', type=str, required=True, help='Path to the input audio file (e.g., "input.wav").')
-    
+    parser.add_argument(
+        "--input-fpath",
+        type=str,
+        required=True,
+        help='Path to the input audio file (e.g., "input.wav").',
+    )
+
     args = parser.parse_args()
     main(args)
