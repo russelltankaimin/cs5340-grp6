@@ -1,0 +1,7 @@
+alias-free-torch>=0.0.6
+descript-audio-codec>=1.0.0
+ninja>=1.13.0
+pesq>=0.0.4
+pip>=26.0.1
+torchcodec>=0.10.0
+torchvision>=0.25.0
