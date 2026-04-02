@@ -4,6 +4,9 @@
 
 # data files
 *.json
+*.png
+*.jpg
+*.jpeg
 
 # model checkpoints
 *.pt
