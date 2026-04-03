@@ -22,6 +22,8 @@ import os
 
 import torch
 import torchaudio
+from torchcodec.decoders import AudioDecoder
+from torchcodec.encoders import AudioEncoder
 
 # ── VAE paths (defaults – override via CLI) ──────────────────────────────
 DEFAULT_VAE_CKPT = os.path.join(".", "vae_ckpt", "ear_vae_44k.pyt")
@@ -181,13 +183,13 @@ def loss_trajectory(z: torch.Tensor, l0: float, l1: float, l2: float) -> torch.T
 
     # Term 1: Gaussian Region Constraint (Zeroth-order)
     # ||w_t||^2
-    loss_0 = torch.norm(w, p=2, dim=1).pow(2).sum() / T_prime
+    loss_0 = w.pow(2).sum(dim=1).sum() / T_prime
 
     # Term 2: First-order Temporal Smoothness (Velocity)
     # ||w_t - w_{t-1}||^2
     if T_prime > 1:
         diff1 = w[1:] - w[:-1]
-        loss_1 = torch.norm(diff1, p=2, dim=1).pow(2).sum() / (T_prime - 1)
+        loss_1 = diff1.pow(2).sum(dim=1).sum() / (T_prime - 1)
     else:
         loss_1 = 0.0
 
@@ -195,7 +197,7 @@ def loss_trajectory(z: torch.Tensor, l0: float, l1: float, l2: float) -> torch.T
     # ||w_t - 2w_{t-1} + w_{t-2}||^2
     if T_prime > 2:
         diff2 = w[2:] - 2 * w[1:-1] + w[:-2]
-        loss_2 = torch.norm(diff2, p=2, dim=1).pow(2).sum() / (T_prime - 2)
+        loss_2 = diff2.pow(2).sum(dim=1).sum() / (T_prime - 2)
     else:
         loss_2 = 0.0
 
@@ -209,7 +211,11 @@ def loss_trajectory(z: torch.Tensor, l0: float, l1: float, l2: float) -> torch.T
 
 def load_audio(path: str, target_sr: int = 44100, device: str = "cpu") -> torch.Tensor:
     """Load audio → stereo float32 tensor of shape (1, 2, T) at target_sr."""
-    y, sr = torchaudio.load(path, backend="ffmpeg")
+    decoder = AudioDecoder(path)
+    samples = decoder.get_all_samples()
+    y = samples.data
+    sr = samples.sample_rate
+
     if sr != target_sr:
         y = torchaudio.transforms.Resample(sr, target_sr)(y)
     if y.ndim == 1:
@@ -260,6 +266,7 @@ def reconstruct(args: argparse.Namespace) -> None:
         stats = json.load(f)
     mu = torch.tensor(stats["mean"], dtype=torch.float32, device=device).view(1, -1, 1)
     sigma = torch.tensor(stats["stds"], dtype=torch.float32, device=device).unsqueeze(0)
+    sigma = torch.clamp(sigma, min=1e-2)
 
     # ── Corruption function ──────────────────────────────────────────────
     corruption_fn = CORRUPTION_REGISTRY[args.corruption]
@@ -333,14 +340,14 @@ def reconstruct(args: argparse.Namespace) -> None:
             print(
                 f"[{step:>5}/{args.steps}]  total={total.item():.4f}  "
                 f"L_w={Lw.item():.4f}  L_colin={Lcol.item():.4f}  "
-                f"L_wav={Lwav.item():.4f}  L_mel={Lmel.item():.4f}",
+                f"L_wav={Lwav.item():.4f}  L_mel={Lmel.item():.4f}  L_traj={L_traj.item():.4f}",
                 flush=True,
             )
 
     # ── Decode best latent & save ────────────────────────────────────────
     with torch.no_grad():
         final_audio = vae.decode(best_z).squeeze(0).cpu()  # (2, T')
-    torchaudio.save(args.output, final_audio, sample_rate=44100, backend="ffmpeg")
+    AudioEncoder(final_audio, sample_rate=44100).to_file(args.output)
     print(f"\nSaved reconstructed audio → {args.output}")
 
 

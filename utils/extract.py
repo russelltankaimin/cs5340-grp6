@@ -2,11 +2,16 @@ import argparse
 import os
 
 import torchaudio
+from torchcodec.decoders import AudioDecoder
+from torchcodec.encoders import AudioEncoder
 import torch.nn.functional as F
 
 
 def extract_clip(audio_path: str, start_time: float, clip_seconds: float, fill: bool = False):
-    waveform, sr = torchaudio.load(audio_path, backend='ffmpeg')
+    decoder = AudioDecoder(audio_path)
+    samples = decoder.get_all_samples()
+    waveform = samples.data
+    sr = samples.sample_rate
 
     if start_time < 0:
         raise ValueError('start_time must be non-negative.')
@@ -61,7 +66,7 @@ def main() -> None:
     )
 
     clip, sr = extract_clip(args.audio_path, args.start_time, args.clip_seconds)
-    torchaudio.save(output_path, clip, sample_rate=sr, backend='ffmpeg')
+    AudioEncoder(clip, sample_rate=sr).to_file(output_path)
 
     print(f'Input file: {args.audio_path}')
     print(f'Start time: {args.start_time}s')

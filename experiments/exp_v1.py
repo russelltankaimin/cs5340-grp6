@@ -21,6 +21,8 @@ import os
 
 import torch
 import torchaudio
+from torchcodec.decoders import AudioDecoder
+from torchcodec.encoders import AudioEncoder
 
 # =========================================================================
 # 1.  CORRUPTION FUNCTION REGISTRY
@@ -96,7 +98,11 @@ def loss_mel(
 
 def load_audio(path: str, target_sr: int = 44100, device: str = "cpu") -> torch.Tensor:
     """Load audio → stereo float32 tensor of shape (1, 2, T) at target_sr."""
-    y, sr = torchaudio.load(path, backend="ffmpeg")
+    decoder = AudioDecoder(path)
+    samples = decoder.get_all_samples()
+    y = samples.data
+    sr = samples.sample_rate
+
     if sr != target_sr:
         y = torchaudio.transforms.Resample(sr, target_sr)(y)
     if y.ndim == 1:
@@ -147,6 +153,7 @@ def reconstruct(args: argparse.Namespace) -> None:
         stats = json.load(f)
     mu = torch.tensor(stats["mean"], dtype=torch.float32, device=device).view(1, -1, 1)
     sigma = torch.tensor(stats["stds"], dtype=torch.float32, device=device).unsqueeze(0)
+    sigma = torch.clamp(sigma, min=1e-2)
 
     # ── Corruption function ──────────────────────────────────────────────
     corruption_fn = CORRUPTION_REGISTRY[args.corruption]
@@ -223,7 +230,7 @@ def reconstruct(args: argparse.Namespace) -> None:
     # ── Decode best latent & save ────────────────────────────────────────
     with torch.no_grad():
         final_audio = vae.decode(best_z).squeeze(0).cpu()  # (2, T')
-    torchaudio.save(args.output, final_audio, sample_rate=44100, backend="ffmpeg")
+    AudioEncoder(final_audio, sample_rate=44100).to_file(args.output)
     print(f"\nSaved reconstructed audio → {args.output}")
 
 

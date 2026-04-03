@@ -5,6 +5,8 @@ import os
 import torch
 import torch.nn.functional as F
 import torchaudio
+from torchcodec.decoders import AudioDecoder
+from torchcodec.encoders import AudioEncoder
 from tqdm import tqdm
 
 from ear_vae.ear_vae import EAR_VAE
@@ -27,7 +29,10 @@ def load_model(device: str) -> EAR_VAE:
 def preprocess_audio(
     audio_path: str, target_sr: int, device: str
 ) -> tuple[torch.Tensor, int]:
-    waveform, sr = torchaudio.load(audio_path, backend="ffmpeg")
+    decoder = AudioDecoder(audio_path)
+    samples = decoder.get_all_samples()
+    waveform = samples.data
+    sr = samples.sample_rate
 
     if waveform.dim() == 1:
         waveform = waveform.unsqueeze(0)
