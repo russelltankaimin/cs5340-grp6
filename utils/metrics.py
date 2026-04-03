@@ -7,8 +7,18 @@ Supports dynamic CPU/GPU execution based on input tensor allocation.
 import torch
 import torchaudio
 import numpy as np
-from pesq import pesq
-from pystoi import stoi
+from torchmetrics.audio.pesq import PerceptualEvaluationSpeechQuality
+from torchmetrics.audio.stoi import ShortTimeObjectiveIntelligibility
+from torchmetrics.audio.dnsmos import DeepNoiseSuppressionMeanOpinionScore
+from torchmetrics.audio.srmr import SpeechReverberationModulationEnergyRatio
+from torchmetrics.audio.nisqa import NonIntrusiveSpeechQualityAssessment
+from torchmetrics.audio import (
+    ComplexScaleInvariantSignalNoiseRatio, 
+    ScaleInvariantSignalDistortionRatio, 
+    ScaleInvariantSignalNoiseRatio, 
+    SignalNoiseRatio, 
+    SignalDistortionRatio
+)
 
 def _align_tensors(clean: torch.Tensor, recon: torch.Tensor) -> tuple[torch.Tensor, torch.Tensor]:
     """Ensures both tensors reside on the exact same computational device."""
@@ -17,99 +27,207 @@ def _align_tensors(clean: torch.Tensor, recon: torch.Tensor) -> tuple[torch.Tens
     return clean, recon
 
 def calculate_mae(clean: torch.Tensor, recon: torch.Tensor) -> float:
-    """Calculates Mean Absolute Error."""
+    """
+    Calculates Mean Absolute Error.
+    LOWER is better. (0 is perfect reconstruction).
+    """
     clean, recon = _align_tensors(clean, recon)
     return torch.nn.functional.l1_loss(clean, recon).item()
 
-def calculate_snr(clean: torch.Tensor, recon: torch.Tensor, eps: float = 1e-8) -> float:
-    """Calculates Signal-to-Noise Ratio (SNR) in dB."""
-    clean, recon = _align_tensors(clean, recon)
-    noise = clean - recon
-    signal_power = torch.sum(clean ** 2)
-    noise_power = torch.sum(noise ** 2)
-    return (10 * torch.log10(signal_power / (noise_power + eps))).item()
-
-def calculate_sisdr(clean: torch.Tensor, recon: torch.Tensor, eps: float = 1e-8) -> float:
-    """Calculates Scale-Invariant Signal-to-Distortion Ratio (SI-SDR) in dB."""
-    clean, recon = _align_tensors(clean, recon)
-    clean = clean - torch.mean(clean)
-    recon = recon - torch.mean(recon)
-    
-    # Project recon onto clean
-    alpha = torch.sum(recon * clean) / (torch.sum(clean ** 2) + eps)
-    target = alpha * clean
-    residual = recon - target
-    
-    target_power = torch.sum(target ** 2)
-    residual_power = torch.sum(residual ** 2)
-    return (10 * torch.log10(target_power / (residual_power + eps))).item()
-
-def calculate_lsd(clean: torch.Tensor, recon: torch.Tensor, n_fft: int = 2048, eps: float = 1e-8) -> float:
-    """Calculates Log-Spectral Distance (LSD)."""
-    clean, recon = _align_tensors(clean, recon)
-    
-    # Convert stereo to mono for consistent STFT evaluation
-    clean_mono = clean.mean(dim=1) if clean.dim() > 1 else clean
-    recon_mono = recon.mean(dim=1) if recon.dim() > 1 else recon
-    
-    # Explicitly allocate the window to the correct device
-    window = torch.hann_window(n_fft, device=clean.device)
-    
-    X_clean = torch.stft(clean_mono.squeeze(), n_fft=n_fft, window=window, return_complex=True)
-    X_recon = torch.stft(recon_mono.squeeze(), n_fft=n_fft, window=window, return_complex=True)
-    
-    mag_clean = torch.abs(X_clean) ** 2
-    mag_recon = torch.abs(X_recon) ** 2
-    
-    log_ratio = 10 * torch.log10((mag_clean + eps) / (mag_recon + eps))
-    lsd = torch.mean(torch.sqrt(torch.mean(log_ratio ** 2, dim=0)))
-    return lsd.item()
-
-def calculate_pesq_stoi(clean: torch.Tensor, recon: torch.Tensor, sr: int) -> tuple[float, float]:
+def calculate_snr(clean: torch.Tensor, recon: torch.Tensor) -> float:
     """
-    Calculates PESQ and STOI. 
-    Resampling occurs on the target device (e.g., GPU), but the final 
-    algorithmic execution must transition to CPU for NumPy compatibility.
+    Calculates Signal-to-Noise Ratio (SNR) in dB.
+    HIGHER is better.
+    """
+    clean, recon = _align_tensors(clean, recon)
+    sns = SignalNoiseRatio().to(clean.device)
+    return sns(recon, clean).item()
+
+def calculate_sdr(clean: torch.Tensor, recon: torch.Tensor) -> float:
+    """
+    Calculates Signal-to-Distortion Ratio (SDR) in dB.
+    HIGHER is better.
+    """
+    clean, recon = _align_tensors(clean, recon)
+    sdr = SignalDistortionRatio().to(clean.device)
+    return sdr(recon, clean).item()
+
+def calculate_sisdr(clean: torch.Tensor, recon: torch.Tensor) -> float:
+    """
+    Calculates Scale-Invariant Signal-to-Distortion Ratio (SI-SDR) in dB.
+    HIGHER is better.
+    """
+    clean, recon = _align_tensors(clean, recon)
+    si_sdr = ScaleInvariantSignalDistortionRatio().to(clean.device)
+    return si_sdr(recon, clean).item()
+
+def calculate_sisnr(clean: torch.Tensor, recon: torch.Tensor) -> float:
+    """
+    Calculates Scale-Invariant Signal-to-Noise Ratio (SI-SNR) in dB.
+    HIGHER is better.
+    """
+    clean, recon = _align_tensors(clean, recon)
+    si_snr = ScaleInvariantSignalNoiseRatio().to(clean.device)
+    return si_snr(recon, clean).item()
+
+def calculate_csisnr(clean: torch.Tensor, recon: torch.Tensor, n_fft: int = 512, hop_length: int = 256) -> float:
+    """
+    Calculates Complex Scale-Invariant Signal-to-Noise Ratio (CSISNR) in dB.
+    HIGHER is better.
     """
     clean, recon = _align_tensors(clean, recon)
     
-    # PESQ and STOI strictly require 1D NumPy arrays (mono audio).
-    # We project the stereo channels to mono via averaging, whilst keeping dimensions intact for torchaudio.
-    clean_mono = clean.mean(dim=1, keepdim=True) if clean.dim() == 3 else clean
-    recon_mono = recon.mean(dim=1, keepdim=True) if recon.dim() == 3 else recon
+    # 1. Map 3D tensor (Batch, Channels, Time) to 2D (Batch * Channels, Time)
+    # If the input is already 2D (Batch, Time), this reshape safely does nothing.
+    B, C, T = clean.shape
+    clean_2d = clean.reshape(B * C, T)
+    recon_2d = recon.reshape(B * C, T)
     
-    # Squeeze completely to achieve the 1D shape (T,)
-    clean_np = clean_mono.squeeze().detach().cpu().numpy()
-    recon_np = recon_mono.squeeze().detach().cpu().numpy()
+    # 2. Compute the Short-Time Fourier Transform (STFT)
+    clean_stft = torch.stft(
+        clean_2d, 
+        n_fft=n_fft, 
+        hop_length=hop_length, 
+        return_complex=True, 
+        pad_mode='constant'
+    )
+    recon_stft = torch.stft(
+        recon_2d, 
+        n_fft=n_fft, 
+        hop_length=hop_length, 
+        return_complex=True, 
+        pad_mode='constant'
+    )
     
-    stoi_score = stoi(clean_np, recon_np, sr, extended=False)
+    # 3. Apply inverse mapping back to (Batch, Channels, Freq, Time)
+    _, F, M = clean_stft.shape
+    clean_stft = clean_stft.reshape(B, C, F, M)
+    recon_stft = recon_stft.reshape(B, C, F, M)
     
-    # PESQ strictly mandates 16000 Hz (wideband) or 8000 Hz (narrowband).
+    # 4. Extract the real and imaginary parts and stack them along a new final dimension
+    # This transforms the shape to (Batch, Channels, Freq, Time, 2)
+    clean_stft_formatted = torch.stack((clean_stft.real, clean_stft.imag), dim=-1)
+    recon_stft_formatted = torch.stack((recon_stft.real, recon_stft.imag), dim=-1)
+    
+    # 5. Calculate the metric
+    csisnr = ComplexScaleInvariantSignalNoiseRatio().to(clean.device)
+    return csisnr(recon_stft_formatted, clean_stft_formatted).item()
+
+def calculate_pesq(clean: torch.Tensor, recon: torch.Tensor, sr: int) -> float:
+    """
+    Calculates Perceptual Evaluation of Speech Quality (PESQ).
+    HIGHER is better. (Range: -0.5 to 4.5)
+    """
+    clean, recon = _align_tensors(clean, recon)
+    
     if sr != 16000:
         resampler = torchaudio.transforms.Resample(orig_freq=sr, new_freq=16000).to(clean.device)
-        # Torchaudio resampler expects (..., time), so we pass the 2D tensor and squeeze the output
-        clean_16k = resampler(clean_mono).squeeze().detach().cpu().numpy()
-        recon_16k = resampler(recon_mono).squeeze().detach().cpu().numpy()
-        calc_sr = 16000
+        clean_16k = resampler(clean)
+        recon_16k = resampler(recon)
     else:
-        clean_16k, recon_16k = clean_np, recon_np
-        calc_sr = sr
+        clean_16k = clean
+        recon_16k = recon
         
-    try:
-        pesq_score = pesq(calc_sr, clean_16k, recon_16k, 'wb')
-    except Exception:
-        # Fallback if audio is pure silence or causes a mathematical exception within PESQ
-        pesq_score = 0.0 
+    pesq_metric = PerceptualEvaluationSpeechQuality(16000, 'wb').to(clean.device)
+    return pesq_metric(recon_16k, clean_16k).item()
+
+def calculate_stoi(clean: torch.Tensor, recon: torch.Tensor, sr: int) -> float:
+    """
+    Calculates Short-Time Objective Intelligibility (STOI).
+    HIGHER is better. (Range: 0.0 to 1.0)
+    """
+    clean, recon = _align_tensors(clean, recon)
+    
+    if sr != 16000:
+        resampler = torchaudio.transforms.Resample(orig_freq=sr, new_freq=16000).to(clean.device)
+        clean_16k = resampler(clean)
+        recon_16k = resampler(recon)
+    else:
+        clean_16k = clean
+        recon_16k = recon
         
-    return pesq_score, stoi_score
+    stoi_metric = ShortTimeObjectiveIntelligibility(16000, False).to(clean.device)
+    return stoi_metric(recon_16k, clean_16k).item()
+
+def calculate_dnsmos(recon: torch.Tensor, sr: int) -> tuple:
+    """
+    Calculates Deep Noise Suppression Mean Opinion Score (DNSMOS).
+    HIGHER is better for all returned values. (Range: 1.0 to 5.0)
+    """
+    if sr != 16000:
+        resampler = torchaudio.transforms.Resample(orig_freq=sr, new_freq=16000).to(recon.device)
+        recon_16k = resampler(recon)
+    else:
+        recon_16k = recon
+        
+    dnsmos_metric = DeepNoiseSuppressionMeanOpinionScore(16000, False).to(recon.device)
+    
+    # DNSMOS returns a dictionary or multiple values depending on the torchmetrics version.
+    # Usually, it returns a dict with p808_mos, mos_sig, mos_bak, mos_ovr.
+    # Evaluating returns the tensor(s). We leave them as tensors to be parsed in evaluate_all.
+    return dnsmos_metric(recon_16k)
+
+def calculate_srmr(recon: torch.Tensor, sr: int) -> float:
+    """
+    Calculates Speech Reverberation Modulation Energy Ratio (SRMR).
+    HIGHER is better.
+    """
+    if sr != 16000:
+        resampler = torchaudio.transforms.Resample(orig_freq=sr, new_freq=16000).to(recon.device)
+        recon_16k = resampler(recon)
+    else:
+        recon_16k = recon
+        
+    srmr_metric = SpeechReverberationModulationEnergyRatio(16000).to(recon.device)
+    return srmr_metric(recon_16k).item()
+
+def calculate_nisqa(recon: torch.Tensor, sr: int) -> tuple:
+    """
+    Calculates Non-Intrusive Speech Quality Assessment (NISQA).
+    HIGHER is better for all returned values. (Range: 1.0 to 5.0)
+    """
+    if sr != 16000:
+        resampler = torchaudio.transforms.Resample(orig_freq=sr, new_freq=16000).to(recon.device)
+        recon_16k = resampler(recon)
+    else:
+        recon_16k = recon
+        
+    nisqa_metric = NonIntrusiveSpeechQualityAssessment(16000).to(recon.device)
+    return nisqa_metric(recon_16k)
 
 def evaluate_all(clean: torch.Tensor, evaluated: torch.Tensor, sr: int) -> dict:
     """Returns a dictionary of all computed metrics, executing on the device of the input tensors."""
+    dnsmos = calculate_dnsmos(evaluated, sr)
+    nisqa = calculate_nisqa(evaluated, sr)
+
+    def extract(metric_output, dict_key, tensor_idx):
+        if isinstance(metric_output, dict):
+            return metric_output[dict_key].item()
+        else:
+            # If it is a tensor, it may be 1D or 2D (e.g., [1, 4]). flatten() ensures safe indexing.
+            if isinstance(metric_output, torch.Tensor):
+                metric_output = metric_output.flatten()
+            return metric_output[tensor_idx].item()
+    
     return {
-        "MAE": calculate_mae(clean, evaluated),
-        "SNR": calculate_snr(clean, evaluated),
-        "SI-SDR": calculate_sisdr(clean, evaluated),
-        "LSD": calculate_lsd(clean, evaluated),
-        "PESQ": calculate_pesq_stoi(clean, evaluated, sr)[0],
-        "STOI": calculate_pesq_stoi(clean, evaluated, sr)[1]
+        # "MAE": calculate_mae(clean, evaluated),
+        # "SNR": calculate_snr(clean, evaluated),
+        # "SI-SDR": calculate_sisdr(clean, evaluated),
+        # "SI-SNR": calculate_sisnr(clean, evaluated),
+        # "CSISNR": calculate_csisnr(clean, evaluated),
+        # "PESQ": calculate_pesq(clean, evaluated, sr),
+        # "STOI": calculate_stoi(clean, evaluated, sr),
+        
+        "DNSMOS_P808": extract(dnsmos, 'p808_mos', 0),
+        "DNSMOS_SPEECH": extract(dnsmos, 'mos_sig', 1),
+        "DNSMOS_BACKGROUND": extract(dnsmos, 'mos_bak', 2),
+        "DNSMOS_OVERALL": extract(dnsmos, 'mos_ovr', 3),
+        
+        "SRMR": calculate_srmr(evaluated, sr),
+        
+        "NISQA_MOS": extract(nisqa, 'mos', 0),
+        "NISQA_NOISINESS": extract(nisqa, 'noisiness', 1),
+        "NISQA_DISCOUNTINUITY": extract(nisqa, 'discontinuity', 2),
+        "NISQA_COLORATION": extract(nisqa, 'coloration', 3),
+        "NISQA_LOUDNESS": extract(nisqa, 'loudness', 4),
     }

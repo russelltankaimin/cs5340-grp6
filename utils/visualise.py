@@ -52,14 +52,17 @@ def plot_metrics_comparison(baseline_metrics: dict, recon_metrics: dict, save_pa
     x = np.arange(len(metrics_keys))
     width = 0.35
     
-    fig, ax = plt.subplots(figsize=(12, 6))
+    # Expanded the figure size to provide more horizontal and vertical rendering space
+    fig, ax = plt.subplots(figsize=(16, 8))
     ax.bar(x - width/2, baseline_vals, width, label='Corrupted (Baseline)', color='#e74c3c')
     ax.bar(x + width/2, recon_vals, width, label='Reconstructed', color='#2ecc71')
     
     ax.set_ylabel('Metric Value')
     ax.set_title('Objective and Perceptual Metrics Comparison')
     ax.set_xticks(x)
-    ax.set_xticklabels(metrics_keys)
+    
+    # Rotated the labels by 45 degrees and anchored them to the right edge
+    ax.set_xticklabels(metrics_keys, rotation=45, ha='right', rotation_mode='anchor')
     ax.legend()
     
     # Add value annotations
@@ -68,6 +71,7 @@ def plot_metrics_comparison(baseline_metrics: dict, recon_metrics: dict, save_pa
     for i, v in enumerate(recon_vals):
         ax.text(i + width/2, v, f"{v:.2f}", ha='center', va='bottom', fontsize=9)
         
+    # tight_layout() will automatically adjust the bottom margin to fit the rotated text
     plt.tight_layout()
     plt.savefig(save_path)
     plt.close()
