@@ -82,3 +82,17 @@ python utils/vae_sample.py --input-fpath path/to/your/input.wav
     ```
 
 7. Note that you can change the type of corruption, the severity of the corruption, and other parameters in the scripts to experiment with different scenarios. Just make sure that the parameters describing the corruption are passed into the `exp_v1.py` script correctly to ensure the reconstruction process works as intended.
+
+## NOTE:
+- `exp_v1.py` : Using the priors from the image trajectory paper.
+- `exp_v2.py` : Addition of a latent trajectory prior
+- `exp_v1_1.py` : 
+    1. Keeps a weak latent-space trajectory prior for optimization stability.
+    2. Adds a stronger x-space trajectory prior on the reconstructed clean waveform.
+    3. Keeps the rectified corruption Jacobian term for supported corruptions:
+        - sinusoidal: exact, zero
+        - soft_clip: exact
+        - tape_wow_flutter: continuous-time approximation
+    4. Disables colinearity by default.
+    5. Disables second-order latent trajectory by default.
+    6. Enables first/second-order x-space trajectory terms.
