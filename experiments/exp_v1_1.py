@@ -31,6 +31,9 @@ import argparse
 import json
 import math
 import os
+# for cases with multiple GPUs
+os.environ['CUDA_VISIBLE_DEVICES'] = '0'
+
 from dataclasses import dataclass
 from typing import Any, Callable
 
@@ -68,9 +71,20 @@ def sinusoidal_noise(
 
 def soft_clip_distortion(
     waveform: torch.Tensor,
-    drive: float = 15.0,
+    drive: float = 5.0,
 ) -> torch.Tensor:
     return torch.tanh(waveform * drive)
+
+def soft_clip_distortion_rms(
+    waveform: torch.Tensor,
+    drive: float = 50.0,
+    eps: float = 1e-8,
+) -> torch.Tensor:
+    """Tanh soft-clipping distortion (fully differentiable, RMS-matched)."""
+    distorted = torch.tanh(waveform * drive)
+    rms_in = waveform.square().mean().sqrt() + eps
+    rms_out = distorted.square().mean().sqrt() + eps
+    return distorted * (rms_in / rms_out)
 
 
 def tape_wow_flutter(
@@ -225,6 +239,44 @@ def logabsdet_jacobian_soft_clip(
     diag_abs = torch.abs(drive_t) * sech_sq
     return torch.log(diag_abs.clamp_min(EPS)).sum()
 
+def logabsdet_jacobian_soft_clip_rms(
+    clean_waveform: torch.Tensor,
+    drive: float = 5.0,
+    eps: float = 1e-8,
+) -> torch.Tensor:
+    x = clean_waveform
+    N = x.numel()
+
+    # --- forward quantities ---
+    scaled = drive * x
+    d = torch.tanh(scaled)
+    sech_sq = torch.cosh(scaled).pow(-2)
+    s = drive * sech_sq                       # d(tanh)/dx per sample
+
+    # --- RMS quantities ---
+    sigma_in = x.square().mean().sqrt()
+    sigma_out = d.square().mean().sqrt()
+    rms_in = sigma_in + eps
+    rms_out = sigma_out + eps
+    R = rms_in / rms_out
+
+    # --- Jacobian = diag(a) + u vᵀ ---
+    # diagonal:  a_i = R · s_i
+    a = R * s
+
+    # rank-1 vectors:  u_i = d_i,  v_j = ∂R/∂x_j
+    #   ∂R/∂x_j = x_j / (N·σ_in·rms_out)
+    #            − R·d_j·s_j / (N·σ_out·rms_out)
+    dR_dx = (x / (N * sigma_in.clamp_min(eps) * rms_out)
+             - R * d * s / (N * sigma_out.clamp_min(eps) * rms_out))
+
+    # --- matrix determinant lemma ---
+    # log|det(J)| = Σ log|a_i|  +  log|1 + vᵀ diag(a)⁻¹ u|
+    log_diag = torch.log(a.abs().clamp_min(eps)).sum()
+    correction = (dR_dx * d / a.clamp_min(eps)).sum()
+    log_rank1 = torch.log((1.0 + correction).abs().clamp_min(eps))
+
+    return log_diag + log_rank1
 
 def logabsdet_jacobian_tape_wow_flutter(
     clean_waveform: torch.Tensor,
@@ -259,6 +311,12 @@ CORRUPTION_REGISTRY: dict[str, CorruptionSpec] = {
         jacobian_mode="exact",
         jacobian_fn=logabsdet_jacobian_soft_clip,
         note="Elementwise tanh soft clip with exact diagonal Jacobian.",
+    ),
+    "soft_clip_rms": CorruptionSpec(
+        fn=soft_clip_distortion_rms,
+        jacobian_mode="exact",
+        jacobian_fn=logabsdet_jacobian_soft_clip_rms,
+        note="Elementwise tanh soft clip with RMS-matching and exact Jacobian via matrix determinant lemma.",
     ),
     "tape_wow_flutter": CorruptionSpec(
         fn=tape_wow_flutter,
