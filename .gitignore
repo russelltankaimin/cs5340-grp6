@@ -1,12 +1,14 @@
 # Audio files
 *.wav
 *.mp3
+*.flac
 
 # data files
 *.json
 *.png
 *.jpg
 *.jpeg
+*.txt
 
 # model checkpoints
 *.pt
