@@ -13,6 +13,20 @@ from experiments.exp_v1_1 import CORRUPTION_REGISTRY, reconstruct
 from utils.metrics import evaluate_all
 from utils.compute_stats import preprocess_audio, split_clips
 
+import warnings
+
+# Suppress the specific PyTorch FutureWarning
+warnings.filterwarnings(
+    "ignore",
+    category=FutureWarning,
+    message=".*`torch.nn.utils.weight_norm` is deprecated.*"
+)
+warnings.filterwarnings(
+    "ignore",
+    category=FutureWarning,
+    message=".*`torch.backends.cuda.sdp_kernel()` is deprecated.*"
+)
+
 # =========================================================================
 # PERSISTENCE UTILITY
 # =========================================================================
@@ -125,7 +139,7 @@ def run_pipeline(args: argparse.Namespace):
                 # Log this failure to the CSV so you know which data points are missing
                 error_row = {
                     "clip_index": i,
-                    "corruption": "FAILED_DECODE",
+                    "corruption": corruption_name,
                     "notes": str(e).split('\n')[0]
                 }
                 save_result_row(csv_path, error_row)
