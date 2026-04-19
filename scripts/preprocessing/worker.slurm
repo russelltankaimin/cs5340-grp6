@@ -67,7 +67,7 @@ for TARGET_DIR in "$INPUT_PARENT"/${PREFIX}*/; do
             python -m ${PREPROCESS_MODULE_DIR}.preprocessing \
                 --input "$filepath" \
                 --output "$file_output_dir" \
-                --clip_seconds "$CLIP_SECONDS"
+                --clip-seconds "$CLIP_SECONDS"
                 
         done
     fi

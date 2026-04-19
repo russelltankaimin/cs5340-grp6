@@ -29,26 +29,27 @@ def load_model(device: str) -> EAR_VAE:
 def preprocess_audio(
     audio_path: str, target_sr: int, device: str
 ) -> tuple[torch.Tensor, int]:
-    decoder = AudioDecoder(audio_path)
-    samples = decoder.get_all_samples()
-    waveform = samples.data
-    sr = samples.sample_rate
-
-    if waveform.dim() == 1:
-        waveform = waveform.unsqueeze(0)
+    try:
+        # Attempt high-performance decode
+        decoder = AudioDecoder(audio_path)
+        waveform = decoder.get_all_samples().to(device)
+        sr = decoder.metadata.sample_rate
+    except Exception as e:
+        print(f"TorchCodec failed for {audio_path} due to: {e}. Falling back to Torchaudio.")
+        # Fallback to standard loading (more robust to minor corruption)
+        waveform, sr = torchaudio.load(audio_path)
+        waveform = waveform.to(device)
 
     if sr != target_sr:
         resampler = torchaudio.transforms.Resample(sr, target_sr).to(device)
-        waveform = resampler(waveform.to(device))
-        sr = target_sr
+        waveform = resampler(waveform)
 
-    waveform = waveform.to(device, dtype=torch.float32)
-
-    # Match `vae_sample.py` behavior: use stereo input.
     if waveform.shape[0] == 1:
-        waveform = torch.cat([waveform, waveform], dim=0)
+        waveform = waveform.repeat(2, 1)
+    elif waveform.shape[0] > 2:
+        waveform = waveform[:2, :]
 
-    return waveform, sr
+    return waveform, target_sr
 
 def split_clips(waveform: torch.Tensor, sr: int, clip_seconds: float, fill: bool = False) -> torch.Tensor:
     samples_per_clip = int(sr * clip_seconds)
@@ -87,7 +88,7 @@ def compute_latent_stats(
     all_latents = torch.cat(latents, dim=0)  # (num_clips, 64, latent_duration_dim)
 
     mean = all_latents.mean(dim=(0, 2))
-    stds = all_latents.std(dim=0, unbiased=False)
+    stds = all_latents.std(dim=(0, 2), unbiased=False)
 
     return mean, stds
 

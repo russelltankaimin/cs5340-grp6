@@ -405,8 +405,8 @@ def reconstruct(args: argparse.Namespace) -> None:
     with open(args.prior_stats, "r") as f:
         stats = json.load(f)
 
-    mu = torch.tensor(stats["mean"], dtype=torch.float32, device=device).view(1, -1, 1)
-    sigma = torch.tensor(stats["stds"], dtype=torch.float32, device=device).unsqueeze(0)
+    mu = torch.tensor(stats["mean"], dtype=torch.float32, device=device).view(1, 64, 1)
+    sigma = torch.tensor(stats["stds"], dtype=torch.float32, device=device).view(1, 64, 1)
     sigma = torch.clamp(sigma, min=1e-2)
 
     spec = CORRUPTION_REGISTRY[args.corruption]

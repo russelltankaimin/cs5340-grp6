@@ -80,16 +80,20 @@ if __name__ == "__main__":
     parser = argparse.ArgumentParser(description="Process and split audio files.")
     parser.add_argument("--input", type=str, required=True, help="Path to the input audio file.")
     parser.add_argument("--output", type=str, required=True, help="Directory to save the outputs.")
-    parser.add_argument("--clip_seconds", type=float, required=True, help="Duration of clips in seconds.")
-    parser.add_argument("--target_sr", type=int, default=24000, help="Target sampling rate (default 24000).")
-    parser.add_argument("--no_pad", action="store_true", help="Disable silence padding on the final clips.")
+    parser.add_argument("--clip-seconds", type=float, required=True, help="Duration of clips in seconds.")
+    parser.add_argument("--target-sr", type=int, default=24000, help="Target sampling rate (default 24000).")
+    parser.add_argument("--no-pad", action="store_true", help="Disable silence padding on the final clips.")
     
     args = parser.parse_args()
     
-    process_audio(
-        input_path=args.input,
-        output_dir=args.output,
-        clip_seconds=args.clip_seconds,
-        target_sr=args.target_sr,
-        pad_silence=not args.no_pad
-    )
+    try:
+        process_audio(
+            input_path=args.input,
+            output_dir=args.output,
+            clip_seconds=args.clip_seconds,
+            target_sr=args.target_sr,
+            pad_silence=not args.no_pad
+        )
+    except Exception as e:
+        print(f"An error occurred during audio processing on {args.input}.")
+        print(f"Error processing audio: {e}")
