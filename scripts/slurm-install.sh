@@ -22,4 +22,4 @@ nvidia-smi
 pip install torchmetrics[all]
 pip uninstall torchcodec torch torchvision torchaudio -y
 pip install torch torchvision torchaudio torchcodec --index-url https://download.pytorch.org/whl/cu126
-
+pip install -r "$REQUIREMENTS"
