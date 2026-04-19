@@ -4,7 +4,7 @@
 SCRIPT_DIR="${HOME}/cs5340"
 INPUT_PARENT="${SCRIPT_DIR}/data_full/original"
 OUTPUT_PARENT="${SCRIPT_DIR}/output"
-SLURM_JOB="${SCRIPT_DIR}/slurm_jobs/worker.slurm"
+SLURM_JOB="${SCRIPT_DIR}/scripts/preprocessing/worker.slurm"
 CLIP_SECONDS=5.0
 
 # Ensure the logs directory exists

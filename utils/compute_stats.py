@@ -51,7 +51,9 @@ def preprocess_audio(
 
     return waveform, target_sr
 
-def split_clips(waveform: torch.Tensor, sr: int, clip_seconds: float, fill: bool = False) -> torch.Tensor:
+def split_clips(
+    waveform: torch.Tensor, sr: int, clip_seconds: float, fill: bool = False
+) -> tuple[torch.Tensor, int]:
     samples_per_clip = int(sr * clip_seconds)
     total_samples = waveform.shape[1]
 
@@ -120,10 +122,10 @@ def main() -> None:
 
     model = load_model(device)
     waveform, sr = preprocess_audio(args.audio_path, target_sr=44100, device=device)
-    clips = split_clips(waveform, sr, args.clip_seconds)
+    clips, num_clips = split_clips(waveform, sr, args.clip_seconds)
 
     print(f"Waveform shape after preprocessing: {waveform.shape}")
-    print(f"Number of clips: {clips.shape[0]}")
+    print(f"Number of clips: {num_clips}")
     print(f"Each clip shape: {clips.shape[1:]}")
 
     mean, stds = compute_latent_stats(model, clips)

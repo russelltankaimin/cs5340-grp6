@@ -1,98 +1,230 @@
 # CS5340 Group 6 - Bayesian Audio Reconstruction
 
-## Basic Setup
+This repository contains our Bayesian audio reconstruction experiments built on top of `EAR_VAE`, along with local single-file tooling, batch pipeline utilities, and SLURM scripts for cluster runs.
 
-### General Setup
-Setup your Python environment and install the required dependencies for the project. We recommend using a virtual environment to manage dependencies. For MacOS and Linux:
+## Repository Layout
+
+```text
+cs5340-grp6/
+├── pipeline.py
+├── README.md
+├── requirements.txt
+├── requirements_new.txt
+├── setup.py
+├── corruptors/
+│   ├── additive_noise.py
+│   ├── audio_corruptor_freq.py
+│   ├── audio_corruptor_single.py
+│   ├── waveform_sinus_dist.py
+│   ├── waveform_soft_clip_dist.py
+│   └── waveform_tap_n_flutter.py
+├── ear_vae/
+│   ├── autoencoders.py
+│   ├── ear_vae.py
+│   └── transformer.py
+├── experiments/
+│   ├── exp_v1.py
+│   ├── exp_v1_1.py
+│   └── exp_v2.py
+├── pipelines/
+│   ├── pipeline_eval.py
+│   └── preprocessing.py
+├── scripts/
+│   ├── gpu_job.sh
+│   ├── gpu_vae_sample.sh
+│   ├── slurm-install.sh
+│   ├── slurm-pipeline.sh
+│   ├── slurm-run.sh
+│   ├── pipeline/
+│   │   ├── submit_jobs.sh
+│   │   └── worker.slurm
+│   └── preprocessing/
+│       ├── submit_jobs.sh
+│       └── worker.slurm
+├── utils/
+│   ├── audio_io.py
+│   ├── compute_stats.py
+│   ├── evaluate.py
+│   ├── extract.py
+│   ├── metrics.py
+│   ├── vae_sample.py
+│   ├── visualise.py
+│   └── waveform_to_mel.py
+└── vae_ckpt/
+    ├── ear_vae_44k.pyt
+    └── model_config.json
+```
+
+### What Each Folder Is For
+
+- `corruptors/`: corruption functions and standalone corruption utilities.
+- `ear_vae/`: local copy of the EAR_VAE model implementation.
+- `experiments/`: reconstruction experiments. `exp_v1.py` is the baseline, `exp_v2.py` adds a latent trajectory prior, and `exp_v1_1.py` is the latest variant with x-space trajectory terms and optional Jacobian support.
+- `pipelines/`: main preprocessing and evaluation pipeline entry points.
+- `scripts/`: SLURM helper scripts for installation, preprocessing, evaluation, and GPU jobs.
+- `utils/`: reusable helpers for stats computation, extraction, evaluation, plotting, and VAE sampling.
+- `vae_ckpt/`: required VAE checkpoint and config files.
+- `pipeline.py`: legacy root-level wrapper that is not the main documented pipeline.
+
+Other useful directories you will see during normal use:
+
+- `data/`: convenient place for local test audio files.
+- `data_full/`: larger dataset-style input directory.
+- `output/`: recommended output location for the main preprocessing/evaluation flow.
+- `results/`: legacy output location used by the root `pipeline.py` wrapper.
+
+## Virtual Environment Setup
+
+### Requirements
+
+- Python 3.11 or newer
+- `ffmpeg` available on your machine
+
+If `ffmpeg` is missing, install it first.
+
+- Windows: `winget install "FFmpeg (Shared)"`
+- macOS: `brew install ffmpeg`
+- Ubuntu/Debian: `sudo apt install ffmpeg`
+
+### Create and Activate the Virtual Environment
+
+macOS / Linux:
+
 ```bash
 python3 -m venv .venv
 source .venv/bin/activate
 ```
 
-For windows:
-```bash
+Windows PowerShell:
+
+```powershell
 python -m venv .venv
-.venv\Scripts\activate
+.venv\Scripts\Activate.ps1
 ```
 
-Install the required dependencies for the project:
+### Install Dependencies
+
+For a normal local setup:
+
 ```bash
+python -m pip install --upgrade pip
 pip install -r requirements.txt
 pip install -e .
 ```
 
-### VAE Setup and Usage
-Reference: https://github.com/Eps-Acoustic-Revolution-Lab/EAR_VAE
+Notes:
 
-Install the custom dependencies for the VAE model:
+- `requirements.txt` is the main project dependency list for local use.
+- `requirements_new.txt` is mainly used by the cluster install script in `scripts/slurm-install.sh`.
+- The reconstruction code expects both `vae_ckpt/ear_vae_44k.pyt` and `vae_ckpt/model_config.json` to exist.
+
+## Run the Main Pipeline
+
+The main documented workflow uses:
+
+1. `pipelines.preprocessing` to split the source audio into `split_80.wav` and `split_20.wav`, and to compute `latent_stats.json`.
+2. `pipelines.pipeline_eval` to chunk the evaluation split, apply one or more corruptions, run reconstruction with `experiments/exp_v1_1.py`, and write metrics to `metrics_report.csv`.
+
+### Step 1: Preprocess the Audio
+
 ```bash
-pip install descript-audio-codec
-pip install alias-free-torch
+python -m pipelines.preprocessing --input data/sample.wav --output output/sample_run --clip-seconds 5
 ```
 
-Note: You might need to install `ffmpeg` separately on your system to handle audio processing. Remember to restart your terminal/IDE after installation. This is not needed if you are running on SoC Cluster.
+This creates:
 
-For example, on MacOS, you can use Homebrew:
+- `output/sample_run/split_80.wav`
+- `output/sample_run/split_20.wav`
+- `output/sample_run/latent_stats.json`
+
+### Step 2: Run the Main Evaluation / Reconstruction Pipeline
+
 ```bash
-brew install ffmpeg
+python -m pipelines.pipeline_eval --input output/sample_run/split_20.wav --output-dir output/sample_run --prior-stats output/sample_run/latent_stats.json --clip-seconds 5 --steps 2000
 ```
 
-For Windows, you can install via winget:
+### Run Only Selected Corruptions
+
 ```bash
-winget install "FFmpeg (Shared)"
+python -m pipelines.pipeline_eval --input output/sample_run/split_20.wav --output-dir output/sample_run --prior-stats output/sample_run/latent_stats.json --clip-seconds 5 --corruptions soft_clip sinusoidal --steps 2000
 ```
 
-Download the model weight file from [HuggingFace](https://huggingface.co/earlab/EAR_VAE/tree/main/pretrained_weight), named `ear_vae_44k.pyt` and place it in the `vae_ckpt` directory.
+Supported corruption names in `pipelines.pipeline_eval` are:
 
-To run the VAE inference script, use the following command:
+- `sinusoidal`
+- `soft_clip`
+- `soft_clip_rms`
+- `tape_wow_flutter`
+
+### Override Corruption Parameters
+
 ```bash
-python utils/vae_sample.py --input-fpath path/to/your/input.wav 
+python -m pipelines.pipeline_eval --input output/sample_run/split_20.wav --output-dir output/sample_run --prior-stats output/sample_run/latent_stats.json --clip-seconds 5 --corruptions soft_clip --corruption_kwargs '{"soft_clip": {"drive": 20.0}}' --steps 2000
 ```
 
-### Experiment Sample Workflow
-1. Choose your favourite audio file and place it in the `data` directory, here we use `data/sample.wav` as an example.
+### Common Optional Arguments
 
-2. We run 
-    ```bash
-    python utils/compute_stats.py --audio-path data/sample.wav
-    ```
-    to compute the statistics of the audio file, which will be used for the Bayesian reconstruction process. If you want to use a prior that does not leak information of the original audio, you can use the statistics computed from a different audio file.
+- `--target-sr 44100`
+- `--steps 2000`
+- `--lr 1e-3`
+- `--log-every 50`
+- `--include-jacobian`
+- `--lambda-logdet 1e-6`
 
-3. We extract a short clip of `T` seconds, here `T=5` seconds, from the original audio file using 
-    ```bash
-    python utils/extract.py --audio-path data/sample.wav --start-time 96 --clip-seconds 5
-    ```
+### Output Structure
 
-4. We then corrupt the extracted clip using 
-    ```bash
-    python corruptors/waveform_soft_clip_dist.py
-    ```
-    You should modify the `audio_path` in the script to point to the extracted clip.
-    You can also use other `waveform_*` scripts in `corruptors/` to apply different types of corruption to the audio clip. Make sure to adjust the parameters in the script to control the severity of the corruption as needed.
+The main pipeline writes into the directory passed to `--output-dir`, for example:
 
-5. Finally, we run 
-    ```bash
-    python experiments/exp_v1.py --input path/to/corrupted/audio.wav --corruption soft_clip --prior-stats <file from step 1>
-    ```
-    to perform the Bayesian reconstruction and obtain the reconstructed audio. 
+```text
+output/sample_run/
+├── latent_stats.json
+├── split_20.wav
+├── split_80.wav
+├── metrics_report.csv
+├── sinusoidal/
+│   ├── clip_0_clean.wav
+│   ├── clip_0_corrupted.wav
+│   └── clip_0_recon.wav
+└── soft_clip/
+    ├── clip_0_clean.wav
+    ├── clip_0_corrupted.wav
+    └── clip_0_recon.wav
+```
 
-6. If you are running on the SoC Cluster, modify `scripts/gpu_job.sh` to include the correct command to run the reconstruction script with the appropriate parameters. Then, submit the job using:
-    ```bash
-    sbatch scripts/gpu_job.sh
-    ```
+## Test on Individual Audio Files
 
-7. Note that you can change the type of corruption, the severity of the corruption, and other parameters in the scripts to experiment with different scenarios. Just make sure that the parameters describing the corruption are passed into the `exp_v1.py` script correctly to ensure the reconstruction process works as intended.
+### Option 1: Quick VAE Smoke Test on One File
 
-## NOTE:
-- `exp_v1.py` : Using the priors from the image trajectory paper.
-- `exp_v2.py` : Addition of a latent trajectory prior
-- `exp_v1_1.py` : 
-    1. Keeps a weak latent-space trajectory prior for optimization stability.
-    2. Adds a stronger x-space trajectory prior on the reconstructed clean waveform.
-    3. Keeps the rectified corruption Jacobian term for supported corruptions:
-        - sinusoidal: exact, zero
-        - soft_clip: exact
-        - tape_wow_flutter: continuous-time approximation
-    4. Disables colinearity by default.
-    5. Disables second-order latent trajectory by default.
-    6. Enables first/second-order x-space trajectory terms.
+This checks that the VAE checkpoint loads and can encode/decode a single audio file.
+
+```bash
+python utils/vae_sample.py --input-fpath data/sample.wav
+```
+
+This writes `<input_stem>_recon.wav` to the project root.
+
+### Option 2: Full Single-File Reconstruction Run
+
+If you want the full Bayesian reconstruction workflow on one audio file, run the main preprocessing + evaluation pipeline:
+
+```bash
+python -m pipelines.preprocessing --input data/sample.wav --output output/sample_run --clip-seconds 5
+python -m pipelines.pipeline_eval --input output/sample_run/split_20.wav --output-dir output/sample_run --prior-stats output/sample_run/latent_stats.json --clip-seconds 5 --corruptions sinusoidal --steps 2000
+```
+
+This is the recommended way to test a single file end to end. By default, `pipelines.pipeline_eval` uses the corruption registry from `experiments/exp_v1_1.py` and writes a `metrics_report.csv` into the chosen output directory.
+
+## Batch / Cluster Usage
+
+For cluster runs, use the scripts in `scripts/`:
+
+- `scripts/slurm-install.sh`: install dependencies in a cluster environment.
+- `scripts/preprocessing/submit_jobs.sh`: submit grouped preprocessing jobs.
+- `scripts/pipeline/submit_jobs.sh`: submit grouped evaluation jobs.
+- `scripts/slurm-pipeline.sh` and `scripts/slurm-run.sh`: older root-level wrappers that still call `pipeline.py`, not the main documented pipeline.
+
+## Notes
+
+- `pipelines/pipeline_eval.py` is the main documented pipeline and uses `experiments/exp_v1_1.py`.
+- `pipeline.py` still exists, but it is treated as a legacy wrapper in this README.
+- `corruptors/audio_corruptor_single.py` is a standalone corruption tool for generating corrupted files, but it is separate from the differentiable corruption functions used inside the reconstruction experiments.

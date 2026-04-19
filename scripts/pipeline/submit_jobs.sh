@@ -3,7 +3,7 @@
 # Define the absolute paths and parameters
 SCRIPT_DIR="${HOME}/cs5340"
 INPUT_PARENT="${SCRIPT_DIR}/output"
-SLURM_JOB="${SCRIPT_DIR}/slurm_jobs/worker.slurm"
+SLURM_JOB="${SCRIPT_DIR}/scripts/pipeline/worker.slurm"
 CLIP_SECONDS=5.0
 
 # Ensure the logs directory exists
